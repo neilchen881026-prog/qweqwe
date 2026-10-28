@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>社區藥局 | 慢箋預約快取與照護幫手</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['"Noto Sans TC"', 'sans-serif'],
+                    },
+                    colors: {
+                        // 莫蘭迪/大地色系配置 (Morandi / Earthy tones)
+                        stone: {
+                            50: '#f9f8f6',
+                            100: '#f0ede6',
+                            200: '#e1dbce',
+                            300: '#cec2af',
+                            400: '#baa38b',
+                            500: '#a88a6d',
+                            600: '#9b765b',
+                            700: '#815e4a',
+                            800: '#6b4e40',
+                            900: '#564136',
+                        },
+                        sage: {
+                            50: '#f4f7f6',
+                            100: '#e3ebe8',
+                            200: '#c7d9d3',
+                            300: '#a1bfb6',
+                            400: '#7aa096',
+                            500: '#5e857b', // Primary active
+                            600: '#4a6a61',
+                            700: '#3d554f',
+                        }
+                    },
+                    animation: {
+                        'fade-in': 'fadeIn 0.3s ease-out forwards',
+                        'pulse-fast': 'pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                    },
+                    keyframes: {
+                        fadeIn: {
+                            '0%': { opacity: '0', transform: 'translateY(5px)' },
+                            '100%': { opacity: '1', transform: 'translateY(0)' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #f0ede6; /* stone-100 */
+            color: #564136; /* stone-900 */
+            -webkit-tap-highlight-color: transparent;
+        }
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .hide-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+        /* Custom radio button styling */
+        input[type="radio"]:checked + div {
+            border-color: #5e857b;
+            background-color: #f4f7f6;
+        }
+        input[type="radio"]:checked + div .radio-dot {
+            background-color: #5e857b;
+        }
+        /* Item counter animation */
+        .counter-btn:active {
+            transform: scale(0.9);
+        }
+    </style>
+</head>
+<body class="antialiased min-h-screen flex justify-center bg-stone-200/50">
+
+    <main class="w-full max-w-5xl bg-stone-50 min-h-screen shadow-2xl relative flex flex-col overflow-hidden mx-auto">
+        
+        <!-- Header & Navigation -->
+        <header class="pt-8 pb-4 px-6 sm:px-10 bg-white shadow-sm z-10 sticky top-0 border-b border-stone-200">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-5">
+                <div>
+                    <div class="flex items-center gap-3 mb-1">
+                        <div class="w-10 h-10 rounded-full bg-sage-100 flex items-center justify-center text-sage-600 shadow-inner">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>
+                        </div>
+                        <h1 class="text-2xl font-bold text-stone-800 tracking-wide">安心護理藥局</h1>
+                    </div>
+                    <p class="text-sm text-stone-500 font-medium ml-14">慢箋預約快取與照護幫手</p>
+                </div>
+                
+                <!-- Navigation Tabs (Segmented Control Style) -->
+                <nav class="bg-stone-100 p-1.5 rounded-2xl shadow-inner overflow-hidden">
+                    <div id="tab-container" class="flex overflow-x-auto hide-scrollbar gap-1 snap-x">
+                        <!-- Tabs injected by JS -->
+                    </div>
+                </nav>
+            </div>
+        </header>
+
+        <!-- Content Area -->
+        <section class="flex-grow overflow-y-auto relative bg-stone-50/50">
+            
+            <!-- Loading Skeleton (Hidden by default) -->
+            <div id="loading-state" class="absolute inset-0 p-6 sm:p-10 hidden flex-col gap-4 z-20">
+                <div class="h-8 bg-stone-200 rounded-md w-1/3 animate-pulse-fast mb-2"></div>
+                <div class="h-4 bg-stone-200 rounded-md w-1/2 animate-pulse-fast mb-6"></div>
+                <div class="h-40 bg-stone-200 rounded-2xl w-full animate-pulse-fast mb-4 shadow-sm"></div>
+                <div class="h-32 bg-stone-200 rounded-2xl w-full animate-pulse-fast shadow-sm"></div>
+            </div>
+
+            <!-- Dynamic Content -->
+            <div id="content-display" class="p-6 sm:p-10 pb-32 sm:pb-32 opacity-0 transition-opacity duration-300 max-w-4xl mx-auto">
+                <!-- Content injected by JS -->
+            </div>
+        </section>
+
+        <!-- Fixed Bottom Action Bar -->
+        <div id="action-bar" class="absolute bottom-0 w-full bg-white/95 backdrop-blur-md border-t border-stone-200 p-4 sm:p-6 pb-8 sm:pb-8 shadow-[0_-10px_30px_rgba(0,0,0,0.05)] z-30 transition-transform duration-300 flex justify-center">
+            <!-- Action button injected by JS -->
+        </div>
+
+    </main>
+
+    <script>
+        // Data Models
+        const scenarios = [
+            {
+                id: 'prescription',
+                title: '慢箋智慧提醒與預約',
+                icon: '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>',
+                actionText: '確認上傳處方箋',
+                generateHTML: () => `
+                    <div class="mb-8">
+                        <h2 class="text-2xl font-bold text-stone-800 mb-2">上傳處方箋，免煩惱領藥日</h2>
+                        <p class="text-base text-stone-500">系統將自動計算領藥區間，並於 LINE 貼心提醒您。</p>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <!-- Upload Mockup -->
+                        <div class="flex flex-col h-full">
+                            <div class="flex-grow border-2 border-dashed border-sage-300 bg-sage-50/50 rounded-3xl p-8 flex flex-col items-center justify-center text-center cursor-pointer hover:bg-sage-100/50 hover:border-sage-400 transition-all group shadow-sm">
+                                <div class="w-16 h-16 bg-white rounded-full flex items-center justify-center mb-4 shadow-sm text-sage-500 group-hover:scale-110 transition-transform duration-300">
+                                    <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                                </div>
+                                <p class="text-base font-bold text-sage-700 mb-1">點擊拍照或上傳處方箋</p>
+                                <p class="text-sm text-sage-500">支援 JPG, PNG 格式</p>
+                            </div>
+                        </div>
+
+                        <!-- Calculation Display Mockup -->
+                        <div class="bg-white rounded-3xl p-6 md:p-8 shadow-sm border border-stone-200 relative overflow-hidden group hover:shadow-md transition-shadow">
+                            <div class="absolute top-0 left-0 w-1.5 h-full bg-sage-400"></div>
+                            <h3 class="text-base font-bold text-stone-800 mb-6 flex items-center gap-2">
+                                <svg class="w-5 h-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                                智慧分析結果預覽
+                            </h3>
+                            
+                            <div class="space-y-5 relative before:absolute before:inset-0 before:ml-3 before:-translate-x-px before:h-full before:w-0.5 before:bg-stone-100">
+                                <!-- Timeline Item 1 -->
+                                <div class="relative flex items-center group is-active">
+                                    <div class="flex items-center justify-center w-6 h-6 rounded-full border-[3px] border-white bg-sage-500 text-white shadow-sm shrink-0 z-10 text-[10px] font-bold">1</div>
+                                    <div class="w-full bg-sage-50/80 p-4 rounded-xl border border-sage-200 ml-4 flex justify-between items-center">
+                                        <p class="text-sm font-bold text-stone-800">第 1 次領藥</p>
+                                        <p class="text-sm font-bold text-sage-600 bg-white px-2 py-1 rounded-md shadow-sm">今日可領</p>
+                                    </div>
+                                </div>
+                                <!-- Timeline Item 2 -->
+                                <div class="relative flex items-center group">
+                                    <div class="flex items-center justify-center w-6 h-6 rounded-full border-[3px] border-white bg-stone-300 text-white shadow-sm shrink-0 z-10 text-[10px] font-bold">2</div>
+                                    <div class="w-full bg-white p-4 rounded-xl border border-stone-200 ml-4 flex justify-between items-center opacity-70">
+                                        <p class="text-sm text-stone-500">第 2 次領藥</p>
+                                        <p class="text-sm font-medium text-stone-700">11/15 ~ 11/25</p>
+                                    </div>
+                                </div>
+                                <!-- Timeline Item 3 -->
+                                <div class="relative flex items-center group">
+                                    <div class="flex items-center justify-center w-6 h-6 rounded-full border-[3px] border-white bg-stone-300 text-white shadow-sm shrink-0 z-10 text-[10px] font-bold">3</div>
+                                    <div class="w-full bg-white p-4 rounded-xl border border-stone-200 ml-4 flex justify-between items-center opacity-70">
+                                        <p class="text-sm text-stone-500">第 3 次領藥</p>
+                                        <p class="text-sm font-medium text-stone-700">12/15 ~ 12/25</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="mt-6 bg-[#06C755]/10 rounded-xl p-4 flex items-start gap-3">
+                                <svg class="w-6 h-6 text-[#06C755] shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M22.5 10.5c0-4.69-4.7-8.5-10.5-8.5S1.5 5.81 1.5 10.5c0 4.2 3.82 7.74 9.04 8.4.38.08.9.24 1.04.59.12.33.04.85 0 1.18 0 0-.15.93-.18 1.13-.05.29-.24 1.13 1.02.59 1.25-.53 6.74-3.96 8.8-6.49 1.17-1.4 1.34-2.8 1.34-5.4z"/></svg>
+                                <p class="text-sm text-stone-600 leading-relaxed">綁定 LINE 官方帳號，我們將於可領藥日<strong class="text-stone-800">前 3 天</strong>發送貼心提醒，不怕忘記拿藥！</p>
+                            </div>
+                        </div>
+                    </div>
+                `
+            },
+            {
+                id: 'express',
+                title: '下班快速取藥通道',
+                icon: '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>',
+                actionText: '確認預約時間',
+                generateHTML: () => `
+                    <div class="mb-8 flex flex-col md:flex-row md:justify-between md:items-end gap-4">
+                        <div>
+                            <h2 class="text-2xl font-bold text-stone-800 mb-2">線上預約，到店快取</h2>
+                            <p class="text-base text-stone-500">藥師預先調劑，免去現場排隊乾等</p>
+                        </div>
+                        <div class="bg-sage-100 text-sage-700 text-sm font-bold px-4 py-2 rounded-xl inline-block w-max border border-sage-200">
+                            🚀 30秒拿了就走
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <!-- Time Selection Form -->
+                        <div class="bg-white rounded-3xl p-6 shadow-sm border border-stone-200">
+                            <label class="block text-base font-bold text-stone-700 mb-4">1. 選擇預計來店日期</label>
+                            
+                            <div class="grid grid-cols-2 gap-4 mb-6">
+                                <label class="relative cursor-pointer group">
+                                    <input type="radio" name="pickup-date" class="peer sr-only" checked>
+                                    <div class="px-4 py-4 rounded-2xl border-2 border-stone-200 text-center transition-all group-hover:border-sage-300">
+                                        <div class="w-4 h-4 rounded-full border-2 border-stone-300 radio-dot mx-auto mb-2 transition-colors"></div>
+                                        <p class="text-base font-bold text-stone-800">今天 (10/13)</p>
+                                    </div>
+                                </label>
+                                <label class="relative cursor-pointer group">
+                                    <input type="radio" name="pickup-date" class="peer sr-only">
+                                    <div class="px-4 py-4 rounded-2xl border-2 border-stone-200 text-center transition-all opacity-70 group-hover:opacity-100 group-hover:border-sage-300">
+                                        <div class="w-4 h-4 rounded-full border-2 border-stone-300 radio-dot mx-auto mb-2 transition-colors"></div>
+                                        <p class="text-base font-bold text-stone-800">明天 (10/14)</p>
+                                    </div>
+                                </label>
+                            </div>
+
+                            <label class="block text-base font-bold text-stone-700 mb-4">2. 選擇大約時段</label>
+                            <div class="space-y-3">
+                                <label class="relative cursor-pointer block group">
+                                    <input type="radio" name="pickup-time" class="peer sr-only">
+                                    <div class="w-full flex items-center justify-between px-5 py-4 rounded-2xl border-2 border-stone-200 transition-all group-hover:border-sage-300 bg-stone-50/50 hover:bg-white">
+                                        <span class="text-base font-medium text-stone-700">下午 17:00 - 18:00</span>
+                                        <div class="w-5 h-5 rounded-full border-2 border-stone-300 radio-dot flex items-center justify-center transition-colors"></div>
+                                    </div>
+                                </label>
+                                <label class="relative cursor-pointer block group">
+                                    <input type="radio" name="pickup-time" class="peer sr-only" checked>
+                                    <div class="w-full flex items-center justify-between px-5 py-4 rounded-2xl border-2 border-stone-200 transition-all group-hover:border-sage-300 bg-stone-50/50 hover:bg-white">
+                                        <span class="text-base font-medium text-stone-700 flex items-center gap-2">
+                                            晚上 18:00 - 19:00 
+                                            <span class="text-[11px] bg-amber-100 text-amber-700 px-2 py-1 rounded-md font-bold tracking-wide">熱門下班時段</span>
+                                        </span>
+                                        <div class="w-5 h-5 rounded-full border-2 border-stone-300 radio-dot flex items-center justify-center transition-colors"></div>
+                                    </div>
+                                </label>
+                                <label class="relative cursor-pointer block group">
+                                    <input type="radio" name="pickup-time" class="peer sr-only">
+                                    <div class="w-full flex items-center justify-between px-5 py-4 rounded-2xl border-2 border-stone-200 transition-all group-hover:border-sage-300 bg-stone-50/50 hover:bg-white">
+                                        <span class="text-base font-medium text-stone-700">晚上 19:00 - 20:00</span>
+                                        <div class="w-5 h-5 rounded-full border-2 border-stone-300 radio-dot flex items-center justify-center transition-colors"></div>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Flow Explanation -->
+                        <div class="bg-stone-100/80 rounded-3xl p-6 sm:p-8 flex flex-col justify-center gap-6 border border-stone-200/60">
+                            <h3 class="font-bold text-stone-800 text-lg mb-2">快速取藥流程</h3>
+                            <div class="flex gap-5">
+                                <div class="flex flex-col items-center">
+                                    <div class="w-10 h-10 bg-white rounded-full flex items-center justify-center text-sage-600 shadow-sm z-10 border border-stone-200"><span class="font-bold text-base">1</span></div>
+                                    <div class="w-0.5 h-12 bg-stone-300 my-2"></div>
+                                    <div class="w-10 h-10 bg-white rounded-full flex items-center justify-center text-sage-600 shadow-sm z-10 border border-stone-200"><span class="font-bold text-base">2</span></div>
+                                </div>
+                                <div class="flex flex-col justify-between py-1">
+                                    <div class="mb-4">
+                                        <p class="text-base font-bold text-stone-800">藥師提前調劑包裝</p>
+                                        <p class="text-sm text-stone-500 mt-1">我們會在您抵達前備妥專屬藥袋</p>
+                                    </div>
+                                    <div>
+                                        <p class="text-base font-bold text-stone-800">到店過卡，交回紙本</p>
+                                        <p class="text-sm text-stone-500 mt-1">至「專屬快取櫃檯」核對身分即刻取藥</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `
+            },
+            {
+                id: 'supplies',
+                title: '照護常備品一鍵備貨',
+                icon: '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>',
+                actionText: '加入預約，到店結帳搬上車',
+                generateHTML: () => `
+                    <div class="mb-8">
+                        <h2 class="text-2xl font-bold text-stone-800 mb-2">順手備齊長輩所需</h2>
+                        <p class="text-base text-stone-500">免去現場挑選與搬運，藥局提前整箱備好。</p>
+                    </div>
+
+                    <!-- Supply Items Grid (Responsive) -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 mb-4">
+                        
+                        <!-- Item 1 -->
+                        <div class="bg-white rounded-3xl p-5 shadow-sm border border-stone-200 flex flex-col h-full hover:shadow-md transition-shadow relative overflow-hidden group">
+                            <div class="absolute top-4 right-4 z-10">
+                                <label class="relative flex items-center cursor-pointer">
+                                  <input type="checkbox" id="chk-0" class="sr-only peer" ${supplyQuantities[0] > 0 ? 'checked' : ''} onclick="event.stopPropagation()">
+                                  <div class="w-7 h-7 bg-white border-2 border-stone-300 rounded-lg peer-checked:bg-sage-500 peer-checked:border-sage-500 flex items-center justify-center transition-all shadow-sm">
+                                    <svg class="w-5 h-5 text-white opacity-0 peer-checked:opacity-100" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>
+                                  </div>
+                                </label>
+                            </div>
+                            
+                            <div class="w-full h-32 bg-stone-50 rounded-2xl flex items-center justify-center mb-5 shrink-0 border border-stone-100 group-hover:bg-stone-100 transition-colors">
+                                <span class="text-5xl">🩲</span>
+                            </div>
+                            
+                            <div class="flex-grow flex flex-col">
+                                <h4 class="text-base font-bold text-stone-800 mb-1">安心成人紙尿褲 (L號)</h4>
+                                <p class="text-sm text-stone-500 mb-4 flex-grow">整箱 6 包入，特價 $1,200</p>
+                                
+                                <div class="flex items-center justify-between mt-auto bg-stone-50 p-2 rounded-xl">
+                                    <span class="text-sm font-bold text-stone-700 ml-2">數量</span>
+                                    <div class="flex items-center gap-3">
+                                        <button class="counter-btn w-9 h-9 rounded-lg bg-white border border-stone-200 text-stone-600 flex items-center justify-center font-bold text-lg hover:bg-stone-100 shadow-sm" onclick="updateSupplyQty(0, -1); event.stopPropagation()">-</button>
+                                        <span id="qty-0" class="text-base font-bold w-6 text-center">${supplyQuantities[0]}</span>
+                                        <button class="counter-btn w-9 h-9 rounded-lg bg-sage-100 text-sage-700 flex items-center justify-center font-bold text-lg hover:bg-sage-200 shadow-sm" onclick="updateSupplyQty(0, 1); event.stopPropagation()">+</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Item 2 -->
+                        <div class="bg-white rounded-3xl p-5 shadow-sm border border-stone-200 flex flex-col h-full hover:shadow-md transition-shadow relative overflow-hidden group">
+                            <div class="absolute top-4 right-4 z-10">
+                                <label class="relative flex items-center cursor-pointer">
+                                  <input type="checkbox" id="chk-1" class="sr-only peer" ${supplyQuantities[1] > 0 ? 'checked' : ''} onclick="event.stopPropagation()">
+                                  <div class="w-7 h-7 bg-white border-2 border-stone-300 rounded-lg peer-checked:bg-sage-500 peer-checked:border-sage-500 flex items-center justify-center transition-all shadow-sm">
+                                    <svg class="w-5 h-5 text-white opacity-0 peer-checked:opacity-100" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>
+                                  </div>
+                                </label>
+                            </div>
+                            
+                            <div class="w-full h-32 bg-stone-50 rounded-2xl flex items-center justify-center mb-5 shrink-0 border border-stone-100 group-hover:bg-stone-100 transition-colors">
+                                <span class="text-5xl">🥛</span>
+                            </div>
+                            
+                            <div class="flex-grow flex flex-col">
+                                <h4 class="text-base font-bold text-stone-800 mb-1">高鈣均衡營養配方</h4>
+                                <p class="text-sm text-stone-500 mb-4 flex-grow">整箱 24 罐入，特價 $1,680</p>
+                                
+                                <div class="flex items-center justify-between mt-auto bg-stone-50 p-2 rounded-xl">
+                                    <span class="text-sm font-bold text-stone-700 ml-2">數量</span>
+                                    <div class="flex items-center gap-3">
+                                        <button class="counter-btn w-9 h-9 rounded-lg bg-white border border-stone-200 text-stone-600 flex items-center justify-center font-bold text-lg hover:bg-stone-100 shadow-sm" onclick="updateSupplyQty(1, -1); event.stopPropagation()">-</button>
+                                        <span id="qty-1" class="text-base font-bold w-6 text-center">${supplyQuantities[1]}</span>
+                                        <button class="counter-btn w-9 h-9 rounded-lg bg-sage-100 text-sage-700 flex items-center justify-center font-bold text-lg hover:bg-sage-200 shadow-sm" onclick="updateSupplyQty(1, 1); event.stopPropagation()">+</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Item 3 -->
+                        <div class="bg-white rounded-3xl p-5 shadow-sm border border-stone-200 flex flex-col h-full hover:shadow-md transition-shadow relative overflow-hidden group">
+                            <div class="absolute top-4 right-4 z-10">
+                                <label class="relative flex items-center cursor-pointer">
+                                  <input type="checkbox" id="chk-2" class="sr-only peer" ${supplyQuantities[2] > 0 ? 'checked' : ''} onclick="event.stopPropagation()">
+                                  <div class="w-7 h-7 bg-white border-2 border-stone-300 rounded-lg peer-checked:bg-sage-500 peer-checked:border-sage-500 flex items-center justify-center transition-all shadow-sm">
+                                    <svg class="w-5 h-5 text-white opacity-0 peer-checked:opacity-100" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>
+                                  </div>
+                                </label>
+                            </div>
+                            
+                            <div class="w-full h-32 bg-stone-50 rounded-2xl flex items-center justify-center mb-5 shrink-0 border border-stone-100 group-hover:bg-stone-100 transition-colors">
+                                <span class="text-5xl">🩸</span>
+                            </div>
+                            
+                            <div class="flex-grow flex flex-col">
+                                <h4 class="text-base font-bold text-stone-800 mb-1">精準血糖試紙組合</h4>
+                                <p class="text-sm text-stone-500 mb-4 flex-grow">試紙50片+採血針50支</p>
+                                
+                                <div class="flex items-center justify-between mt-auto bg-stone-50 p-2 rounded-xl">
+                                    <span class="text-sm font-bold text-stone-700 ml-2">數量</span>
+                                    <div class="flex items-center gap-3">
+                                        <button class="counter-btn w-9 h-9 rounded-lg bg-white border border-stone-200 text-stone-600 flex items-center justify-center font-bold text-lg hover:bg-stone-100 shadow-sm" onclick="updateSupplyQty(2, -1); event.stopPropagation()">-</button>
+                                        <span id="qty-2" class="text-base font-bold w-6 text-center">${supplyQuantities[2]}</span>
+                                        <button class="counter-btn w-9 h-9 rounded-lg bg-sage-100 text-sage-700 flex items-center justify-center font-bold text-lg hover:bg-sage-200 shadow-sm" onclick="updateSupplyQty(2, 1); event.stopPropagation()">+</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                `
+            }
+        ];
+
+        let currentActiveIndex = 0;
+        let supplyQuantities = [1, 0, 0]; 
+        
+        const elements = {
+            tabContainer: document.getElementById('tab-container'),
+            contentDisplay: document.getElementById('content-display'),
+            loadingState: document.getElementById('loading-state'),
+            actionBar: document.getElementById('action-bar')
+        };
+
+        function init() {
+            renderTabs();
+            loadScenarioContent(currentActiveIndex, false);
+        }
+
+        function renderTabs() {
+            elements.tabContainer.innerHTML = '';
+            scenarios.forEach((scenario, index) => {
+                const isActive = index === currentActiveIndex;
+                
+                const btn = document.createElement('button');
+                btn.className = `flex items-center gap-2 whitespace-nowrap px-5 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 snap-center shrink-0 ${
+                    isActive 
+                    ? 'bg-white text-sage-700 shadow-[0_2px_8px_rgba(0,0,0,0.06)] ring-1 ring-stone-200/50' 
+                    : 'text-stone-500 hover:text-stone-700 hover:bg-stone-200/50'
+                }`;
+                btn.innerHTML = `${scenario.icon} ${scenario.title}`;
+                btn.onclick = () => handleTabClick(index);
+                
+                elements.tabContainer.appendChild(btn);
+            });
+        }
+
+        function handleTabClick(index) {
+            if (index === currentActiveIndex) return;
+            currentActiveIndex = index;
+            
+            renderTabs();
+            
+            // Scroll active tab into view centrally
+            const activeTab = elements.tabContainer.children[index];
+            if(activeTab) {
+                const scrollLeft = activeTab.offsetLeft - (elements.tabContainer.offsetWidth / 2) + (activeTab.offsetWidth / 2);
+                elements.tabContainer.scrollTo({ left: scrollLeft, behavior: 'smooth' });
+            }
+
+            loadScenarioContent(index, true);
+        }
+
+        function loadScenarioContent(index, withAnimation = true) {
+            const scenario = scenarios[index];
+            
+            if (withAnimation) {
+                elements.contentDisplay.style.opacity = '0';
+                elements.loadingState.classList.remove('hidden');
+                elements.loadingState.classList.add('flex');
+                elements.actionBar.style.transform = 'translateY(100%)';
+
+                setTimeout(() => {
+                    elements.loadingState.classList.add('hidden');
+                    elements.loadingState.classList.remove('flex');
+                    
+                    updateDOM(scenario);
+                    
+                    elements.contentDisplay.classList.add('animate-fade-in');
+                    elements.contentDisplay.style.opacity = '1';
+                    elements.actionBar.style.transform = 'translateY(0)';
+                    
+                    setTimeout(() => {
+                        elements.contentDisplay.classList.remove('animate-fade-in');
+                    }, 300);
+
+                }, 400);
+            } else {
+                updateDOM(scenario);
+                elements.contentDisplay.style.opacity = '1';
+                elements.actionBar.style.transform = 'translateY(0)';
+            }
+        }
+
+        function updateDOM(scenario) {
+            elements.contentDisplay.innerHTML = scenario.generateHTML();
+            
+            elements.actionBar.innerHTML = `
+                <div class="w-full max-w-2xl mx-auto">
+                    <button class="w-full bg-sage-600 hover:bg-sage-700 active:scale-[0.98] transition-all duration-200 text-white font-bold text-lg py-4 rounded-2xl shadow-xl hover:shadow-2xl flex items-center justify-center gap-2" onclick="handleAction(this)">
+                        ${scenario.actionText}
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+                    </button>
+                </div>
+            `;
+        }
+
+        function updateSupplyQty(index, delta) {
+            supplyQuantities[index] += delta;
+            
+            if (supplyQuantities[index] < 0) {
+                supplyQuantities[index] = 0;
+            }
+            
+            const qtySpan = document.getElementById('qty-' + index);
+            if (qtySpan) {
+                qtySpan.innerText = supplyQuantities[index];
+            }
+            
+            const checkbox = document.getElementById('chk-' + index);
+            if (checkbox) {
+                checkbox.checked = supplyQuantities[index] > 0;
+            }
+        }
+
+        function handleAction(btnElement) {
+            const originalHtml = btnElement.innerHTML;
+            btnElement.innerHTML = `<svg class="w-6 h-6 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg> 處理中...`;
+            btnElement.disabled = true;
+            btnElement.classList.add('opacity-80');
+
+            setTimeout(() => {
+                btnElement.innerHTML = `<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg> 完成`;
+                btnElement.classList.replace('bg-sage-600', 'bg-stone-700');
+                btnElement.classList.replace('hover:bg-sage-700', 'hover:bg-stone-800');
+                
+                setTimeout(() => {
+                    btnElement.innerHTML = originalHtml;
+                    btnElement.classList.replace('bg-stone-700', 'bg-sage-600');
+                    btnElement.classList.replace('hover:bg-stone-800', 'hover:bg-sage-700');
+                    btnElement.disabled = false;
+                    btnElement.classList.remove('opacity-80');
+                }, 1500);
+            }, 800);
+        }
+
+        document.addEventListener('DOMContentLoaded', init);
+
+    </script>
+</body>
+</html>
